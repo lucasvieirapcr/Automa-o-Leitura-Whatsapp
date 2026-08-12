@@ -161,6 +161,10 @@ def main():
                    help="lista branca: só estes números são lidos nas privadas")
     p.add_argument("--privadas-ignoradas", default=os.environ.get("PRIVADAS_IGNORADAS", ""),
                    help="lista negra de números nas privadas")
+    p.add_argument("--capturar-proprias", action="store_true",
+                   help="captura também as mensagens que o próprio número envia (sobrescreve o padrão do modo)")
+    p.add_argument("--ignorar-proprias", action="store_true",
+                   help="ignora as mensagens que o próprio número envia (sobrescreve o padrão do modo)")
 
     args = p.parse_args()
 
@@ -168,6 +172,8 @@ def main():
         erro("Escolha --teste ou --producao, não os dois")
     if not (args.teste or args.producao):
         erro("Informe o modo: --teste (número pessoal) ou --producao")
+    if args.capturar_proprias and args.ignorar_proprias:
+        erro("Escolha --capturar-proprias ou --ignorar-proprias, não os dois")
 
     ai_key = os.environ.get("AI_API_KEY", "")
     evo_key = os.environ.get("EVOLUTION_API_KEY", "")
@@ -202,6 +208,15 @@ def main():
     # acompanha um contato específico (ou a conversa consigo mesmo).
     monitorar_privadas = bool(permitidas) or not modo_teste
 
+    # Padrão por modo (teste captura para permitir mandar mensagem de prova;
+    # produção normalmente ignora), mas a flag explícita sempre vence.
+    if args.capturar_proprias:
+        capturar_proprias = True
+    elif args.ignorar_proprias:
+        capturar_proprias = False
+    else:
+        capturar_proprias = modo_teste
+
     if not grupos and not permitidas and modo_teste:
         erro(
             "Nada para monitorar",
@@ -230,7 +245,7 @@ def main():
         "HORARIOS_DIARIO": horarios,
         "GRUPOS_MONITORADOS": grupos,
         "MONITORAR_PRIVADAS": "True" if monitorar_privadas else "False",
-        "CAPTURAR_PROPRIAS": "True" if modo_teste else "False",
+        "CAPTURAR_PROPRIAS": "True" if capturar_proprias else "False",
         "PRIVADAS_PERMITIDAS": permitidas,
         "PRIVADAS_IGNORADAS": normalizar_lista(args.privadas_ignoradas),
     }
@@ -293,7 +308,7 @@ def main():
         print("   Conversas privadas ... TODAS lidas")
     if valores["PRIVADAS_IGNORADAS"]:
         print(f"   Lista negra .......... {valores['PRIVADAS_IGNORADAS']}")
-    print(f"   Mensagens próprias ... {'capturadas' if modo_teste else 'ignoradas'}")
+    print(f"   Mensagens próprias ... {'capturadas' if capturar_proprias else 'ignoradas'}")
 
     print(f"\n   Arquivos em: {DESTINO}")
     print("\nPróximos passos:")
