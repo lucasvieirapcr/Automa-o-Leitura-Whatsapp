@@ -9,8 +9,9 @@ from pathlib import Path
 def check_command(cmd, name, min_version=None):
     """Verifica se um comando está instalado e sua versão."""
     try:
+        cmd_args = [sys.executable, '--version'] if cmd == 'python3' else [cmd, '--version']
         result = subprocess.run(
-            [cmd, '--version'],
+            cmd_args,
             capture_output=True,
             text=True,
             timeout=5
@@ -30,7 +31,6 @@ def main():
         ('python3', 'Python 3.9+'),
         ('node', 'Node.js 18+'),
         ('git', 'Git'),
-        ('docker', 'Docker'),
     ]
 
     missing = []
@@ -39,6 +39,13 @@ def main():
         if not check_command(cmd, name):
             print(f"  ❌ {name} NÃO instalado!")
             missing.append((name, cmd))
+
+    # Checar Docker apenas como informativo
+    print("\nDocker:", end=" ")
+    if check_command('docker', 'Docker'):
+        pass
+    else:
+        print("  ℹ️ Docker não detectado (opcional para execuções alternativas)")
 
     if missing:
         print("\n" + "=" * 60)

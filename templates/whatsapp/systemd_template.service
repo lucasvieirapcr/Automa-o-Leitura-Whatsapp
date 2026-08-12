@@ -1,0 +1,23 @@
+[Unit]
+Description=Diario Executivo WhatsApp - watcher
+Documentation=https://github.com/lucasvieirapcr/Automa-o-Leitura-Whatsapp
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{USUARIO}}
+WorkingDirectory={{HOME}}/meu-agente
+ExecStart=/usr/bin/python3 {{HOME}}/meu-agente/watcher.py
+
+# Reinicia sozinho se cair (queda de rede, erro da Evolution API, reboot)
+Restart=always
+RestartSec=15
+
+# Logs vão para o journal do sistema: journalctl -u diario-executivo -f
+StandardOutput=journal
+StandardError=journal
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

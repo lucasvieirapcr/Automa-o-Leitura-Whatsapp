@@ -23,7 +23,7 @@
     <key>StandardErrorPath</key>
     <string>{{HOME}}/meu-agente/watcher-error.log</string>
 
-    <key>StartInterval</key>
-    <integer>60</integer>
+    <key>WorkingDirectory</key>
+    <string>{{HOME}}/meu-agente</string>
 </dict>
 </plist>

@@ -5,7 +5,14 @@ install_evolution.py — Baixa e configura Evolution API
 import subprocess
 import json
 import secrets
+import sys
 from pathlib import Path
+
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
 
 def is_already_running():
     """Verifica se já existe uma Evolution API rodando na porta 8080."""

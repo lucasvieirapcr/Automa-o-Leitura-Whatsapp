@@ -119,7 +119,7 @@ def main():
         print(f"✅ API funcionando!")
         print(f"   Resposta: {message}\n")
         print("Proxima etapa:")
-        print("  python3 setup/test_agent.py\n")
+        print("  python3 setup/list_groups.py\n")
     else:
         print(f"❌ Erro na API:")
         print(f"   {message}\n")
