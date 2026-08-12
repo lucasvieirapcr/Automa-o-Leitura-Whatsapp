@@ -227,7 +227,17 @@ def run_digest(horas: int = None, deliver: bool = True) -> dict:
     texto, stats = build_digest(inicio, fim)
 
     if not texto:
-        logger.info("📭 Nenhuma mensagem relevante no período — diário não gerado.")
+        if stats["total"] == 0:
+            logger.info(
+                "📭 Nenhuma mensagem capturada no período — diário não gerado.\n"
+                "   Verifique se o watcher está rodando e se os grupos monitorados "
+                "tiveram movimento nesse intervalo."
+            )
+        else:
+            logger.info(
+                f"📭 {stats['total']} mensagem(ns) capturada(s), mas nenhuma passou "
+                f"pelo pré-filtro (tudo classificado como ruído) — diário não gerado."
+            )
         return {"status": "vazio", "stats": stats}
 
     if texto.startswith("Erro "):
