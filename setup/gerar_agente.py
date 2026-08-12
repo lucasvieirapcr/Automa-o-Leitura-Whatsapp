@@ -93,22 +93,37 @@ def normalizar_lista(valor: str, sufixo_jid: bool = False) -> str:
 
 def validar_grupos(valor: str) -> str:
     """
-    GRUPOS_MONITORADOS aceita só JID de grupo (...@g.us).
+    Normaliza GRUPOS_MONITORADOS para JIDs de grupo (...@g.us).
 
-    Número de telefone aqui é o erro mais comum e o mais silencioso: nenhum
-    grupo casa com ele, então o agente roda sem capturar nada.
+    Completa o sufixo quando só o ID foi colado, aceitando os dois formatos
+    do WhatsApp: o novo (18+ dígitos, ex. 120363410074810635) e o antigo
+    (telefone-timestamp, ex. 556181272233-1520522353).
+
+    Recusa número de telefone, que é o erro mais silencioso possível aqui:
+    nenhum grupo casa com ele, e o agente sobe sem capturar nada.
     """
     itens = [i.strip() for i in (valor or "").split(",") if i.strip()]
-    invalidos = [i for i in itens if not i.endswith("@g.us")]
+
+    normalizados, invalidos = [], []
+    for item in itens:
+        if item.endswith("@g.us"):
+            normalizados.append(item)
+        elif re.fullmatch(r"\d+-\d+", item):        # formato antigo
+            normalizados.append(f"{item}@g.us")
+        elif re.fullmatch(r"\d{15,}", item):        # ID de grupo sem sufixo
+            normalizados.append(f"{item}@g.us")
+        else:
+            invalidos.append(item)
 
     if invalidos:
         erro(
-            "Estes não são JIDs de grupo: " + ", ".join(invalidos),
-            "JID de grupo termina em @g.us — descubra com: python3 setup/list_groups.py\n"
-            "   Se você quer acompanhar uma CONVERSA PRIVADA (inclusive a sua com você\n"
-            "   mesmo), não use --grupos: use --privadas-permitidas com o número.",
+            "Não são grupos: " + ", ".join(invalidos),
+            "Isso parece número de telefone. Grupo tem ID longo (18+ dígitos) e\n"
+            "   termina em @g.us — descubra com: python3 setup/list_groups.py\n"
+            "   Para acompanhar uma CONVERSA PRIVADA (inclusive a sua com você mesmo),\n"
+            "   não use --grupos: use --privadas-permitidas com o número.",
         )
-    return ",".join(itens)
+    return ",".join(normalizados)
 
 
 def validar_horarios(valor: str) -> str:
