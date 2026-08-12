@@ -106,6 +106,8 @@ def main():
     parser.add_argument("--url", help="endereço da Evolution API")
     parser.add_argument("--key", help="apikey da Evolution API")
     parser.add_argument("--instance", help="nome da instância")
+    parser.add_argument("--reset", action="store_true",
+                        help="apaga a instância antes de criar (sessão travada após pareamento que falhou)")
     args = parser.parse_args()
 
     EVOLUTION_URL = (args.url or os.environ.get("EVOLUTION_URL") or DEFAULT_URL).rstrip("/")
@@ -117,6 +119,13 @@ def main():
     print(f"   Evolution API: {EVOLUTION_URL}")
 
     instance_name = args.instance or os.environ.get("INSTANCE_NAME") or DEFAULT_INSTANCE
+
+    if args.reset:
+        print(f"\n🗑️  Apagando instância existente ({instance_name}) antes de recriar...")
+        nome = quote(instance_name, safe="")
+        call_api(f"/instance/logout/{nome}", method="DELETE")
+        call_api(f"/instance/delete/{nome}", method="DELETE")
+        print("   ✅ Removida (ou já não existia)")
 
     # 1. Verificar se instância já existe
     print(f"\n1️⃣  Verificando instância: {instance_name}")
