@@ -101,6 +101,8 @@ def main():
     parser = argparse.ArgumentParser(description="Conecta o WhatsApp via QR Code")
     parser.add_argument("--ascii", action="store_true",
                         help="força o QR Code no terminal (servidor sem tela)")
+    parser.add_argument("--imagem", action="store_true",
+                        help="salva o QR como imagem PNG em vez de desenhar no terminal (para baixar com scp)")
     parser.add_argument("--url", help="endereço da Evolution API")
     parser.add_argument("--key", help="apikey da Evolution API")
     parser.add_argument("--instance", help="nome da instância")
@@ -155,27 +157,33 @@ def main():
         elif isinstance(qrcode_field, str):
             qr_data = qrcode_field
 
-    modo_terminal = args.ascii or sem_tela()
+    modo_imagem = args.imagem and qr_data
+    modo_terminal = (not modo_imagem) and (args.ascii or sem_tela())
 
-    if modo_terminal and qr_code:
-        print("   (servidor sem interface gráfica — desenhando o QR Code aqui)\n")
-        mostrar_qr_ascii(qr_code)
-        print("   📱 WhatsApp no celular → Configurações → Aparelhos Conectados → Conectar Aparelho")
-        print("   💡 Se o QR sair cortado, aumente a janela do terminal e rode de novo.")
-    elif modo_terminal and qr_data:
-        # Servidor sem tela e sem a string crua do QR: salva a imagem e ensina a abrir
+    if modo_imagem or (modo_terminal and not qr_code and qr_data):
+        # --imagem explícito, ou servidor sem tela sem a string crua do QR:
+        # salva a imagem e ensina a baixar com scp
         import base64
         img_path = Path.home() / "meu-agente" / "qrcode.png"
         img_path.parent.mkdir(parents=True, exist_ok=True)
         img_path.write_bytes(base64.b64decode(qr_data.split(",")[-1]))
         print(f"   ✅ QR Code salvo em: {img_path}")
-        print("\n   Para vê-lo do seu computador, rode NA SUA MÁQUINA:")
+        print("\n   Para baixá-lo, rode NA SUA MÁQUINA (não na VPS):")
         print(f"     scp -P PORTA_SSH usuario@IP_DA_VPS:{img_path} .")
         print("   (-P maiúsculo; a porta SSH da HostGator costuma ser 22022)")
-        print("   E abra o arquivo qrcode.png que for baixado.")
+        print("   Abra o qrcode.png baixado e escaneie com o celular:")
+        print("   WhatsApp → Configurações → Aparelhos Conectados → Conectar Aparelho")
+        print(f"   ⏱️  Ele expira em ~60s — se demorar para baixar, rode o comando de novo.")
+    elif modo_terminal and qr_code:
+        print("   (servidor sem interface gráfica — desenhando o QR Code aqui)\n")
+        mostrar_qr_ascii(qr_code)
+        print("   📱 WhatsApp no celular → Configurações → Aparelhos Conectados → Conectar Aparelho")
+        print("   💡 Se o QR sair cortado, aumente a janela do terminal e rode de novo.")
     elif qr_data:
         # Salvar QR Code como imagem PNG e abrir no visualizador
-        import base64, subprocess, tempfile, os
+        # (base64/tempfile só existem aqui; os e subprocess já vêm do topo do
+        # arquivo — reimportá-los aqui os tornaria locais em toda a função)
+        import base64, tempfile
         img_path = Path(tempfile.gettempdir()) / "agente-qrcode.png"
         try:
             img_bytes = base64.b64decode(qr_data.split(",")[-1])
