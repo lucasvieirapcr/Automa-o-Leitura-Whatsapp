@@ -54,24 +54,30 @@ def _get_api_key():
     return DEFAULT_API_KEY
 
 
-def call_api(endpoint):
+def call_api(endpoint, method="GET", data=None):
     req = urllib.request.Request(
         f"{EVOLUTION_URL}{endpoint}",
+        data=json.dumps(data).encode() if data is not None else None,
         headers={"apikey": _get_api_key(), "Content-Type": "application/json"},
-        method="GET",
+        method=method,
     )
     try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            return json.loads(resp.read())
+        with urllib.request.urlopen(req, timeout=45) as resp:
+            corpo = resp.read()
+            return json.loads(corpo) if corpo else {}
     except Exception as e:
         return {"error": str(e)}
 
 
-def fetch_groups():
+def _instancia():
     # quote() é obrigatório: instância criada pela interface pode ter espaço
     # no nome ("n8n evolution"), e espaço em URL quebra a requisição
-    r = call_api(f"/group/fetchAllGroups/{quote(INSTANCE_NAME, safe='')}?getParticipants=false")
+    return quote(INSTANCE_NAME, safe="")
 
+
+def _por_fetch_all_groups():
+    """Caminho preferido: pergunta os grupos ao WhatsApp, com nome e tamanho."""
+    r = call_api(f"/group/fetchAllGroups/{_instancia()}?getParticipants=false")
     if isinstance(r, dict) and "error" in r:
         return None, r["error"]
 
@@ -88,8 +94,54 @@ def fetch_groups():
                 "name": g.get("subject") or g.get("name") or jid,
                 "participantes": g.get("size") or g.get("participantsCount") or "?",
             })
+    return grupos, None
 
-    grupos.sort(key=lambda x: x["name"].lower())
+
+def _por_find_chats():
+    """
+    Alternativa: lê as conversas já gravadas no banco da Evolution.
+
+    Serve quando o fetchAllGroups devolve erro 500 — o que acontece em
+    instâncias com muitos grupos ou com sessão restaurada do banco, porque
+    aquele endpoint consulta o WhatsApp grupo por grupo. Este lê do Postgres.
+    """
+    r = call_api(f"/chat/findChats/{_instancia()}", method="POST", data={})
+    if isinstance(r, dict) and "error" in r:
+        return None, r["error"]
+
+    itens = r if isinstance(r, list) else (r.get("chats", []) if isinstance(r, dict) else [])
+
+    grupos = []
+    for c in itens:
+        if not isinstance(c, dict):
+            continue
+        jid = str(c.get("remoteJid") or c.get("id") or "")
+        if jid.endswith("@g.us"):
+            grupos.append({
+                "jid": jid,
+                "name": c.get("name") or c.get("pushName") or c.get("subject") or jid,
+                "participantes": "?",
+            })
+    return grupos, None
+
+
+def fetch_groups():
+    """Tenta o endpoint de grupos; se falhar, cai para a lista de conversas."""
+    grupos, erro = _por_fetch_all_groups()
+
+    if not grupos:
+        grupos_alt, erro_alt = _por_find_chats()
+        if grupos_alt:
+            grupos, erro = grupos_alt, None
+        elif erro is None:
+            erro = erro_alt
+
+    if grupos is None:
+        return None, erro
+
+    # Um mesmo grupo pode vir das duas fontes
+    unicos = {g["jid"]: g for g in grupos}
+    grupos = sorted(unicos.values(), key=lambda x: x["name"].lower())
     return grupos, None
 
 
