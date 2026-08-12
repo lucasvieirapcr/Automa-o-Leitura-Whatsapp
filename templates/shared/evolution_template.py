@@ -73,13 +73,16 @@ def connection_state() -> str:
 
 def fetch_groups() -> list:
     """
-    Lista todos os grupos do número conectado.
+    Lista os grupos do número conectado, para o diário citar o nome e não o JID.
+
+    Tenta /group/fetchAllGroups (pergunta ao WhatsApp) e cai para
+    /chat/findChats (lê do banco da Evolution) quando o primeiro devolve
+    500 — o que acontece em instância com muitos grupos ou sessão restaurada.
 
     Returns:
         [{"jid": "...@g.us", "name": "Financeiro"}, ...]
     """
     r = request(f"/group/fetchAllGroups/{INSTANCE}?getParticipants=false")
-
     bruto = r if isinstance(r, list) else (r.get("groups", []) if isinstance(r, dict) else [])
 
     grupos = []
@@ -87,9 +90,27 @@ def fetch_groups() -> list:
         if not isinstance(g, dict):
             continue
         jid = g.get("id") or g.get("jid") or ""
-        nome = g.get("subject") or g.get("name") or jid
         if jid.endswith("@g.us"):
-            grupos.append({"jid": jid, "name": nome})
+            grupos.append({"jid": jid, "name": g.get("subject") or g.get("name") or jid})
+
+    if grupos:
+        return grupos
+
+    r = request(f"/chat/findChats/{INSTANCE}", method="POST", data={}, timeout=45)
+    itens = r if isinstance(r, list) else (r.get("chats", []) if isinstance(r, dict) else [])
+
+    for c in itens:
+        if not isinstance(c, dict):
+            continue
+        jid = str(c.get("remoteJid") or c.get("id") or "")
+        if jid.endswith("@g.us"):
+            grupos.append({
+                "jid": jid,
+                "name": c.get("name") or c.get("pushName") or c.get("subject") or jid,
+            })
+
+    if grupos:
+        logger.info(f"👥 {len(grupos)} grupo(s) obtidos via findChats")
     return grupos
 
 
@@ -108,12 +129,23 @@ def fetch_messages(count: int = 50, page: int = 1) -> list:
     A v2 responde {"messages": {"records": [...]}}; a v1 devolve uma lista
     direta. Os dois formatos são tratados aqui.
     """
-    result = request(
-        f"/chat/findMessages/{INSTANCE}",
-        method="POST",
-        data={"page": page, "offset": count, "count": count},
+    # Só page+offset: mandar "count" junto faz a v2 devolver lista vazia
+    msgs = _extrair_registros(
+        request(f"/chat/findMessages/{INSTANCE}", method="POST",
+                data={"page": page, "offset": count})
+    )
+    if msgs or page > 1:
+        return msgs
+
+    # Página 1 vazia: pode ser Evolution v1, que não pagina e usa "count"
+    return _extrair_registros(
+        request(f"/chat/findMessages/{INSTANCE}", method="POST",
+                data={"count": count})
     )
 
+
+def _extrair_registros(result) -> list:
+    """Aceita os formatos de resposta da v1 e da v2."""
     if isinstance(result, list):
         return result
     if isinstance(result, dict) and "messages" in result:

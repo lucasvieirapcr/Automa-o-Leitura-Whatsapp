@@ -364,7 +364,24 @@ def importar_historico(horas: int) -> int:
 
     logger.info(f"⏬ Importando as últimas {horas}h de histórico...")
     novas = capturar(jids, max_paginas=2000, limite_ts=limite, silencioso=True)
-    logger.info(f"✅ {novas} mensagem(ns) importada(s)")
+
+    if novas:
+        logger.info(f"✅ {novas} mensagem(ns) importada(s)")
+    else:
+        # Zero importadas quase nunca é "não havia mensagem" — costuma ser
+        # configuração. Diz o que checar em vez de sair calado.
+        logger.warning("⚠️  Nenhuma mensagem importada. Verifique:")
+        if jids:
+            logger.warning(f"   • os grupos monitorados existem e tiveram movimento nas últimas {horas}h")
+            logger.warning(f"     monitorando: {', '.join(sorted(jids))}")
+        else:
+            logger.warning("   • nenhum grupo selecionado (monitorando todos)")
+        if not MONITORAR_PRIVADAS:
+            logger.warning("   • conversas privadas estão DESLIGADAS (MONITORAR_PRIVADAS = False)")
+        if not CAPTURAR_PROPRIAS:
+            logger.warning("   • suas próprias mensagens estão sendo ignoradas (CAPTURAR_PROPRIAS = False)")
+        logger.warning(f"   • o período pedido: últimas {horas}h — tente um valor maior")
+
     return novas
 
 
