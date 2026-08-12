@@ -91,6 +91,26 @@ def normalizar_lista(valor: str, sufixo_jid: bool = False) -> str:
     return ",".join(itens)
 
 
+def validar_grupos(valor: str) -> str:
+    """
+    GRUPOS_MONITORADOS aceita só JID de grupo (...@g.us).
+
+    Número de telefone aqui é o erro mais comum e o mais silencioso: nenhum
+    grupo casa com ele, então o agente roda sem capturar nada.
+    """
+    itens = [i.strip() for i in (valor or "").split(",") if i.strip()]
+    invalidos = [i for i in itens if not i.endswith("@g.us")]
+
+    if invalidos:
+        erro(
+            "Estes não são JIDs de grupo: " + ", ".join(invalidos),
+            "JID de grupo termina em @g.us — descubra com: python3 setup/list_groups.py\n"
+            "   Se você quer acompanhar uma CONVERSA PRIVADA (inclusive a sua com você\n"
+            "   mesmo), não use --grupos: use --privadas-permitidas com o número.",
+        )
+    return ",".join(itens)
+
+
 def validar_horarios(valor: str) -> str:
     itens = [i.strip() for i in (valor or "").split(",") if i.strip()]
     for h in itens:
@@ -158,6 +178,30 @@ def main():
         args.horarios if args.horarios is not None else ("" if modo_teste else "12:00,18:00")
     )
 
+    grupos = validar_grupos(args.grupos)
+    permitidas = normalizar_lista(args.privadas_permitidas)
+    destino = normalizar_jid(args.destino)
+
+    # A lista branca já limita a leitura aos números informados, então ela
+    # liga as conversas privadas mesmo no modo teste — é assim que se
+    # acompanha um contato específico (ou a conversa consigo mesmo).
+    monitorar_privadas = bool(permitidas) or not modo_teste
+
+    if not grupos and not permitidas and modo_teste:
+        erro(
+            "Nada para monitorar",
+            "Informe --grupos com JIDs de grupo, ou --privadas-permitidas com números.",
+        )
+
+    # Origem igual ao destino nunca é lida (proteção contra loop)
+    origens = set(grupos.split(",")) | {normalizar_jid(n) for n in permitidas.split(",") if n}
+    if destino in origens:
+        erro(
+            f"O destino ({destino}) também está na lista de origens",
+            "O destino do diário nunca é lido, para não virar loop. Escolha outro\n"
+            "   destino — por exemplo um grupo criado só para receber o diário.",
+        )
+
     valores = {
         "AI_PROVIDER": args.provider,
         "AI_MODEL": args.modelo or MODELO_PADRAO[args.provider],
@@ -167,12 +211,12 @@ def main():
         "EVOLUTION_URL": args.url.rstrip("/"),
         "EVOLUTION_API_KEY": evo_key,
         "INSTANCE_NAME": args.instancia,
-        "DEST_GROUP_JID": normalizar_jid(args.destino),
+        "DEST_GROUP_JID": destino,
         "HORARIOS_DIARIO": horarios,
-        "GRUPOS_MONITORADOS": normalizar_lista(args.grupos),
-        "MONITORAR_PRIVADAS": "False" if modo_teste else "True",
+        "GRUPOS_MONITORADOS": grupos,
+        "MONITORAR_PRIVADAS": "True" if monitorar_privadas else "False",
         "CAPTURAR_PROPRIAS": "True" if modo_teste else "False",
-        "PRIVADAS_PERMITIDAS": normalizar_lista(args.privadas_permitidas),
+        "PRIVADAS_PERMITIDAS": permitidas,
         "PRIVADAS_IGNORADAS": normalizar_lista(args.privadas_ignoradas),
     }
 
@@ -222,13 +266,16 @@ def main():
     print(f"   Instância ............ {valores['INSTANCE_NAME']}")
     print(f"   Chave da Evolution ... {'*' * 8} ({len(evo_key)} caracteres)")
 
-    grupos = valores["GRUPOS_MONITORADOS"]
-    print(f"   Grupos monitorados ... {grupos.count(',') + 1 if grupos else 'TODOS'}")
+    g = valores["GRUPOS_MONITORADOS"]
+    print(f"   Grupos monitorados ... {g.count(',') + 1 if g else ('nenhum' if permitidas else 'TODOS')}")
     print(f"   Destino do diário .... {valores['DEST_GROUP_JID']}")
     print(f"   Horários ............. {valores['HORARIOS_DIARIO'] or 'nenhum (só manual)'}")
-    print(f"   Conversas privadas ... {'lidas' if not modo_teste else 'NÃO lidas'}")
-    if valores["PRIVADAS_PERMITIDAS"]:
-        print(f"   Lista branca ......... {valores['PRIVADAS_PERMITIDAS']}")
+    if not monitorar_privadas:
+        print("   Conversas privadas ... NÃO lidas")
+    elif permitidas:
+        print(f"   Conversas privadas ... somente a lista branca ({permitidas})")
+    else:
+        print("   Conversas privadas ... TODAS lidas")
     if valores["PRIVADAS_IGNORADAS"]:
         print(f"   Lista negra .......... {valores['PRIVADAS_IGNORADAS']}")
     print(f"   Mensagens próprias ... {'capturadas' if modo_teste else 'ignoradas'}")
