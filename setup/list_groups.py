@@ -20,6 +20,7 @@ import os
 import sys
 import argparse
 import urllib.request
+from urllib.parse import quote
 from pathlib import Path
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -67,7 +68,9 @@ def call_api(endpoint):
 
 
 def fetch_groups():
-    r = call_api(f"/group/fetchAllGroups/{INSTANCE_NAME}?getParticipants=false")
+    # quote() é obrigatório: instância criada pela interface pode ter espaço
+    # no nome ("n8n evolution"), e espaço em URL quebra a requisição
+    r = call_api(f"/group/fetchAllGroups/{quote(INSTANCE_NAME, safe='')}?getParticipants=false")
 
     if isinstance(r, dict) and "error" in r:
         return None, r["error"]

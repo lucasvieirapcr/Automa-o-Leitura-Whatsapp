@@ -8,6 +8,7 @@ import sys
 import os
 import argparse
 import subprocess
+from urllib.parse import quote
 from pathlib import Path
 
 if hasattr(sys.stdout, 'reconfigure'):
@@ -141,7 +142,7 @@ def main():
 
     # 2. Gerar QR Code
     print("\n2️⃣  Gerando QR Code...")
-    qr_result = call_api(f"/instance/connect/{instance_name}", method="GET")
+    qr_result = call_api(f"/instance/connect/{quote(instance_name, safe='')}", method="GET")
 
     # Evolution API v2: base64 direto; v1: dentro de "qrcode.base64" ou string
     qr_data = qr_result.get("base64")
@@ -195,7 +196,7 @@ def main():
     # 3. Aguardar conexão
     print("\n3️⃣  Aguardando scan do QR Code (até 90s)...")
     for i in range(90):
-        status_result = call_api(f"/instance/connectionState/{instance_name}", method="GET")
+        status_result = call_api(f"/instance/connectionState/{quote(instance_name, safe='')}", method="GET")
         state = status_result.get("instance", {}).get("state", "") or status_result.get("state", "")
 
         if state == "open":
